@@ -1,5 +1,5 @@
-import { motion, useScroll, useTransform } from "motion/react";
-import { useRef, useState } from "react";
+import { motion, useScroll, useMotionValueEvent, useTransform } from "motion/react";
+import { useRef, useState, useEffect } from "react";
 import { ArrowRight } from "lucide-react";
 import { SITE_CONTENT } from "../constants";
 
@@ -38,35 +38,42 @@ const portfolioItems = [
 ];
 
 function BeforeAfterSlider({ image }: { image: string }) {
-  const [sliderPosition, setSliderPosition] = useState(50);
+  const [sliderPosition, setSliderPosition] = useState(100);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const handleMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDragging && e.type !== 'click') return;
+  useEffect(() => {
+    const handleMove = (e: MouseEvent | TouchEvent) => {
+      if (!isDragging || !containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const x = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+      const position = ((x - rect.left) / rect.width) * 100;
+      setSliderPosition(Math.max(0, Math.min(100, position)));
+    };
 
-    const container = e.currentTarget as HTMLElement;
-    const rect = container.getBoundingClientRect();
-    const x = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const position = ((x - rect.left) / rect.width) * 100;
-    setSliderPosition(Math.max(0, Math.min(100, position)));
-  };
+    const handleUp = () => setIsDragging(false);
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMove);
+      window.addEventListener('mouseup', handleUp);
+      window.addEventListener('touchmove', handleMove, { passive: false });
+      window.addEventListener('touchend', handleUp);
+      return () => {
+        window.removeEventListener('mousemove', handleMove);
+        window.removeEventListener('mouseup', handleUp);
+        window.removeEventListener('touchmove', handleMove);
+        window.removeEventListener('touchend', handleUp);
+      };
+    }
+  }, [isDragging]);
 
   return (
-    <div
-      className="relative w-full h-full select-none cursor-col-resize"
-      onMouseMove={handleMove}
-      onTouchMove={handleMove}
-      onMouseDown={() => setIsDragging(true)}
-      onMouseUp={() => setIsDragging(false)}
-      onMouseLeave={() => setIsDragging(false)}
-      onTouchStart={() => setIsDragging(true)}
-      onTouchEnd={() => setIsDragging(false)}
-      onClick={handleMove}
-    >
+    <div ref={containerRef} className="relative w-full h-full select-none">
       {/* Before Image (grayscale) */}
       <img
         src={image}
         alt="Before"
+        draggable={false}
         className="absolute inset-0 w-full h-full object-cover grayscale"
       />
 
@@ -78,28 +85,31 @@ function BeforeAfterSlider({ image }: { image: string }) {
         <img
           src={image}
           alt="After"
+          draggable={false}
           className="w-full h-full object-cover"
         />
       </div>
 
-      {/* Slider Line */}
+      {/* Slider Line Area (wider for easy grab) */}
       <div
-        className="absolute top-0 bottom-0 w-1 bg-luxury-gold shadow-lg"
+        className="absolute top-0 bottom-0 w-8 -translate-x-1/2 cursor-col-resize flex justify-center group/slider z-10"
         style={{ left: `${sliderPosition}%` }}
+        onMouseDown={(e) => {
+          e.stopPropagation(); // prevent parent scroll
+          setIsDragging(true);
+        }}
+        onTouchStart={(e) => {
+          e.stopPropagation(); // prevent parent scroll
+          setIsDragging(true);
+        }}
       >
+        <div className="w-1 h-full bg-luxury-gold shadow-lg" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 bg-luxury-gold rounded-full flex items-center justify-center shadow-xl">
           <div className="flex gap-1">
             <div className="w-0.5 h-4 bg-luxury-charcoal" />
             <div className="w-0.5 h-4 bg-luxury-charcoal" />
           </div>
         </div>
-      </div>
-
-      <div className="absolute top-4 left-4 bg-luxury-charcoal/80 backdrop-blur-sm px-3 py-1 rounded">
-        <span className="text-luxury-cream text-xs">Before</span>
-      </div>
-      <div className="absolute top-4 right-4 bg-luxury-charcoal/80 backdrop-blur-sm px-3 py-1 rounded">
-        <span className="text-luxury-cream text-xs">After</span>
       </div>
     </div>
   );
@@ -108,12 +118,58 @@ function BeforeAfterSlider({ image }: { image: string }) {
 export function PortfolioShowcase() {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const lastProgress = useRef(0);
+
   const { scrollYProgress } = useScroll({
     target: containerRef,
     offset: ["start end", "end start"],
   });
 
-  const x = useTransform(scrollYProgress, [0, 1], ["0%", "-30%"]);
+  const { scrollXProgress } = useScroll({
+    container: scrollContainerRef,
+  });
+
+  const scrollbarX = useTransform(scrollXProgress, [0, 1], [0, 88]);
+
+  useMotionValueEvent(scrollYProgress, "change", (latest) => {
+    if (scrollContainerRef.current) {
+      const delta = latest - lastProgress.current;
+      lastProgress.current = latest;
+      
+      const maxScroll = scrollContainerRef.current.scrollWidth - scrollContainerRef.current.clientWidth;
+      // Scroll by a portion of the total width for a subtle effect
+      scrollContainerRef.current.scrollLeft += delta * maxScroll * 0.4;
+    }
+  });
+
+  // Mouse Drag to Scroll Logic
+  const isDragging = useRef(false);
+  const startX = useRef(0);
+  const scrollLeftStart = useRef(0);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    isDragging.current = true;
+    startX.current = e.pageX - (scrollContainerRef.current?.offsetLeft || 0);
+    scrollLeftStart.current = scrollContainerRef.current?.scrollLeft || 0;
+  };
+
+  const handleMouseLeave = () => {
+    isDragging.current = false;
+  };
+
+  const handleMouseUp = () => {
+    isDragging.current = false;
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging.current) return;
+    e.preventDefault();
+    const x = e.pageX - (scrollContainerRef.current?.offsetLeft || 0);
+    const walk = (x - startX.current) * 1.5; // Scroll speed multiplier
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollLeft = scrollLeftStart.current - walk;
+    }
+  };
 
   return (
     <section ref={containerRef} className="py-24 bg-luxury-dark-surface overflow-hidden">
@@ -145,14 +201,12 @@ export function PortfolioShowcase() {
           scrollbarWidth: 'none',
           msOverflowStyle: 'none',
         }}
+        onMouseDown={handleMouseDown}
+        onMouseLeave={handleMouseLeave}
+        onMouseUp={handleMouseUp}
+        onMouseMove={handleMouseMove}
       >
-        <motion.div
-          drag="x"
-          dragConstraints={scrollContainerRef}
-          dragElastic={0.1}
-          style={{ x }}
-          className="flex gap-8 px-6 lg:px-16 pb-4"
-        >
+        <div className="flex gap-8 px-6 lg:px-16 pb-4 w-max">
           {portfolioItems.map((item, index) => (
             <motion.div
               key={item.id}
@@ -163,18 +217,7 @@ export function PortfolioShowcase() {
               whileHover={{ scale: 1.02 }}
               className="flex-shrink-0 w-[350px] lg:w-[500px] h-[600px] relative group rounded-sm overflow-hidden"
             >
-              {item.beforeAfter ? (
-                <BeforeAfterSlider image={item.image} />
-              ) : (
-                <>
-                  <img
-                    src={item.image}
-                    alt={item.title}
-                    className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-luxury-charcoal via-luxury-charcoal/20 to-transparent" />
-                </>
-              )}
+              <BeforeAfterSlider image={item.image} />
 
               <div className="absolute bottom-0 left-0 right-0 p-8 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
                 <div className="text-luxury-gold text-sm tracking-wider uppercase mb-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
@@ -186,7 +229,38 @@ export function PortfolioShowcase() {
               </div>
             </motion.div>
           ))}
-        </motion.div>
+        </div>
+      </div>
+
+      {/* Custom Interactive Scrollbar */}
+      <div className="flex justify-center mt-12 px-6">
+        <div 
+          className="w-32 h-1.5 bg-luxury-cream/10 rounded-full relative cursor-pointer"
+          onClick={(e) => {
+            if (!scrollContainerRef.current) return;
+            const rect = e.currentTarget.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            // The thumb is 40px wide. We center the thumb at the click position.
+            const thumbWidth = 40;
+            const trackWidth = 128; // 32 * 4px
+            
+            // Calculate percentage based on center of thumb
+            // effective track width is trackWidth - thumbWidth = 88px
+            const effectiveClickX = Math.max(0, Math.min(88, clickX - thumbWidth / 2));
+            const percentage = effectiveClickX / 88;
+            
+            const maxScroll = scrollContainerRef.current.scrollWidth - scrollContainerRef.current.clientWidth;
+            scrollContainerRef.current.scrollTo({
+              left: maxScroll * percentage,
+              behavior: "smooth"
+            });
+          }}
+        >
+          <motion.div
+            className="absolute top-0 bottom-0 left-0 w-10 bg-luxury-gold rounded-full shadow-[0_0_10px_rgba(212,175,55,0.5)]"
+            style={{ x: scrollbarX }}
+          />
+        </div>
       </div>
 
       {/* Custom Scrollbar Styles */}
