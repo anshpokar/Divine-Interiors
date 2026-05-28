@@ -64,14 +64,19 @@ export function Hero({ isFirstVisit = false }: { isFirstVisit?: boolean }) {
 
       {/* Mobile Layout */}
       <div className="lg:hidden relative w-full min-h-screen flex items-center">
-        <div className="absolute inset-0">
+        <motion.div 
+          className="absolute inset-0"
+          initial={{ opacity: 0, scale: 1.05 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 1.2, delay: isFirstVisit ? 2.1 : 0 }}
+        >
           <img
             src={SITE_CONTENT.hero.mobileImage}
             alt={SITE_CONTENT.hero.imageAlt}
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-luxury-charcoal/75" />
-        </div>
+        </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 30 }}
