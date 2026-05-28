@@ -22,7 +22,7 @@ export function Preloader({ isFirstVisit }: { isFirstVisit: boolean }) {
       {isLoading && (
         <motion.div
           key="preloader"
-          className="fixed inset-0 z-[100] flex pointer-events-auto"
+          className="fixed inset-0 z-[9999] flex w-full h-[100dvh] pointer-events-auto"
         >
           {/* Left Door */}
           <motion.div
