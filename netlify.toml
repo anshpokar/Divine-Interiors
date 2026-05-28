@@ -6,4 +6,4 @@
   command = "npm run build"
   
   # The folder that Vite outputs the compiled site to
-  publish = "frontend/dist"
+  publish = "dist"
