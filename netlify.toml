@@ -1,0 +1,9 @@
+[build]
+  # Set the base directory to where our React app lives
+  base = "frontend"
+  
+  # The command to build the React app
+  command = "npm run build"
+  
+  # The folder that Vite outputs the compiled site to
+  publish = "frontend/dist"
